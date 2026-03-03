@@ -4,7 +4,6 @@ import {
   Image as ImageIcon, CheckCircle, AlertCircle, LayoutTemplate, 
   Download, Link as LinkIcon, Users, Plus, Trash2, ChevronDown
 } from 'lucide-react';
-import { toPng, toJpeg } from 'html-to-image';
 import Papa from 'papaparse';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -89,6 +88,8 @@ interface CardData {
   photoUrl: string | null;
   bloodType: string;
   attributes: string[];
+  issueDate: string;
+  expiryDate: string;
 }
 
 const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: typeof CARD_SIZES.standard }>(({ data, size }, ref) => {
@@ -210,8 +211,12 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
           <p className="text-[7px] text-gray-500 mt-[2mm] max-w-[60mm]">
             هذه البطاقة شخصية وتثبت هوية المتطوع في الهلال الأحمر الجزائري. يرجى إعادتها إلى اللجنة الولائية في حال العثور عليها أو انتهاء الصلاحية.
           </p>
-          <div className="mt-[4mm] border-t border-gray-100 pt-[2mm] w-full">
+          <div className="mt-[4mm] border-t border-gray-100 pt-[2mm] w-full flex flex-col gap-[1mm]">
              <span className="text-[8px] font-black text-gray-900 font-fr">ID: {data.volunteerId}</span>
+             <div className="flex justify-center gap-[4mm]">
+               <span className="text-[7px] text-gray-400">الإصدار: <span className="text-gray-700 font-bold">{data.issueDate}</span></span>
+               <span className="text-[7px] text-gray-400">الانتهاء: <span className="text-gray-700 font-bold">{data.expiryDate || '----------'}</span></span>
+             </div>
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-[1.5mm] bg-red-600"></div>
@@ -225,13 +230,13 @@ export default function App() {
   const [formData, setFormData] = useState<CardData>({
     firstNameAr: '', lastNameAr: '', firstNameFr: '', lastNameFr: '',
     role: '', cellName: '', birthDate: '', birthPlace: '',
-    wilaya: '', volunteerId: '', photoUrl: null, bloodType: '', attributes: []
+    wilaya: '', volunteerId: '', photoUrl: null, bloodType: '', attributes: [],
+    issueDate: new Date().toISOString().split('T')[0],
+    expiryDate: ''
   });
   const [batchData, setBatchData] = useState<CardData[]>([]);
   const [sheetUrl, setSheetUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [activeExportId, setActiveExportId] = useState<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const batchCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -260,67 +265,6 @@ export default function App() {
       const reader = new FileReader();
       reader.onloadend = () => setFormData(prev => ({ ...prev, photoUrl: reader.result as string }));
       reader.readAsDataURL(file);
-    }
-  };
-
-  const handleExportImage = async (format: 'png' | 'jpg') => {
-    const node = cardRef.current;
-    if (!node) return;
-    
-    try {
-      setIsLoading(true);
-      const options = { 
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      };
-      
-      const dataUrl = format === 'png' 
-        ? await toPng(node, options)
-        : await toJpeg(node, { ...options, quality: 0.95 });
-      
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `CRA-Card-${formData.lastNameAr || 'Volunteer'}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setShowExportMenu(false);
-      setIsLoading(false);
-    } catch (err) {
-      console.error('Export failed', err);
-      setIsLoading(false);
-      alert('فشل تصدير الصورة. يرجى التأكد من استقرار الاتصال بالإنترنت والمحاولة مرة أخرى.');
-    }
-  };
-
-  const handleExportBatchImage = async (id: string, firstName: string, lastName: string, format: 'png' | 'jpg') => {
-    const node = batchCardRefs.current[id];
-    if (!node) return;
-    
-    try {
-      const options = { 
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      };
-
-      const dataUrl = format === 'png' 
-        ? await toPng(node, options)
-        : await toJpeg(node, { ...options, quality: 0.95 });
-      
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `CRA-Card-${lastName || 'Volunteer'}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setActiveExportId(null);
-    } catch (err) {
-      console.error('Export failed', err);
-      alert('فشل تصدير الصورة.');
     }
   };
 
@@ -355,7 +299,9 @@ export default function App() {
             volunteerId: row['رقم المتطوع'] || String(idx + 1000),
             photoUrl: processPhotoUrl(row['الصورة الشخصية']),
             bloodType: row['الزمرة الدموية'] || '',
-            attributes: (row['الصفات'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5)
+            attributes: (row['الصفات'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5),
+            issueDate: row['تاريخ الإصدار'] || new Date().toISOString().split('T')[0],
+            expiryDate: row['تاريخ الانتهاء'] || ''
           }));
           setBatchData(mappedData);
           setIsLoading(false);
@@ -550,6 +496,18 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Dates */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 mr-1">تاريخ الإصدار (تلقائي)</label>
+                      <input type="date" name="issueDate" value={formData.issueDate} onChange={handleInputChange} className="w-full px-5 py-3 rounded-2xl border border-slate-200 focus:border-red-500 transition-all outline-none bg-slate-50" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-slate-700 mr-1">تاريخ الانتهاء</label>
+                      <input type="date" name="expiryDate" value={formData.expiryDate} onChange={handleInputChange} className="w-full px-5 py-3 rounded-2xl border border-slate-200 focus:border-red-500 transition-all outline-none" />
+                    </div>
+                  </div>
+
                   {/* Photo Upload */}
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700 mr-1">الصورة الشخصية</label>
@@ -596,32 +554,13 @@ export default function App() {
                   <VolunteerCard ref={cardRef} data={formData} size={CARD_SIZES.standard} />
                 </div>
 
-                <div className="w-full grid grid-cols-2 gap-4">
+                <div className="w-full">
                   <button 
                     onClick={() => window.print()}
-                    className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-slate-200 active:scale-[0.98]"
+                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-slate-200 active:scale-[0.98]"
                   >
                     <Printer className="w-5 h-5" /> طباعة
                   </button>
-                  <div className="relative">
-                    <button 
-                      onClick={() => setShowExportMenu(!showExportMenu)}
-                      onBlur={() => setTimeout(() => setShowExportMenu(false), 200)}
-                      className="w-full flex items-center justify-center gap-2 bg-white border-2 border-slate-200 hover:border-red-500 text-slate-700 font-bold py-4 rounded-2xl transition-all active:scale-[0.98]"
-                    >
-                      <Download className="w-5 h-5" /> تصدير صورة
-                    </button>
-                    {showExportMenu && (
-                      <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 animate-in fade-in slide-in-from-bottom-2">
-                        <button onClick={() => handleExportImage('png')} className="w-full text-right px-4 py-3 hover:bg-red-50 hover:text-red-600 rounded-xl text-sm font-bold flex items-center justify-between transition-colors">
-                          PNG <span className="text-[10px] opacity-50">(جودة عالية)</span>
-                        </button>
-                        <button onClick={() => handleExportImage('jpg')} className="w-full text-right px-4 py-3 hover:bg-red-50 hover:text-red-600 rounded-xl text-sm font-bold flex items-center justify-between transition-colors">
-                          JPG <span className="text-[10px] opacity-50">(حجم أصغر)</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
@@ -680,7 +619,8 @@ export default function App() {
                   {[
                     'الاسم (عربي)', 'اللقب (عربي)', 'الاسم (فرنسي)', 'اللقب (فرنسي)',
                     'الصفة', 'الخلية', 'تاريخ الميلاد', 'مكان الميلاد',
-                    'الزمرة الدموية', 'اللجنة الولائية', 'رقم المتطوع', 'الصورة الشخصية'
+                    'الزمرة الدموية', 'اللجنة الولائية', 'رقم المتطوع', 'الصورة الشخصية',
+                    'تاريخ الإصدار', 'تاريخ الانتهاء'
                   ].map(col => (
                     <div key={col} className="bg-white/50 px-3 py-1.5 rounded-lg border border-blue-100 text-[10px] font-bold text-blue-800 flex items-center gap-1.5">
                       <CheckCircle className="w-3 h-3 text-blue-500" /> {col}
@@ -720,21 +660,6 @@ export default function App() {
                 {batchData.map((data, idx) => (
                   <div key={data.id || idx} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group">
                     <div className="absolute top-4 left-4 flex gap-2 z-20">
-                      <div className="relative">
-                        <button 
-                          onClick={() => setActiveExportId(activeExportId === data.id ? null : data.id!)}
-                          onBlur={() => setTimeout(() => setActiveExportId(null), 200)}
-                          className="w-8 h-8 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        {activeExportId === data.id && (
-                          <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 p-1 z-50 min-w-[100px] animate-in fade-in slide-in-from-top-2">
-                            <button onClick={() => handleExportBatchImage(data.id!, data.firstNameAr, data.lastNameAr, 'png')} className="w-full text-right px-3 py-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-[10px] font-bold transition-colors">PNG</button>
-                            <button onClick={() => handleExportBatchImage(data.id!, data.firstNameAr, data.lastNameAr, 'jpg')} className="w-full text-right px-3 py-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-[10px] font-bold transition-colors">JPG</button>
-                          </div>
-                        )}
-                      </div>
                       <button 
                         onClick={() => setBatchData(prev => prev.filter((_, i) => i !== idx))}
                         className="w-8 h-8 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors"
