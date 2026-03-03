@@ -107,12 +107,12 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
       >
         {/* Background Watermark */}
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.07] pointer-events-none">
-          <img src={CRA_LOGO} alt="" className="w-[70%]" />
+          <img src={CRA_LOGO} alt="" className="w-[70%]" crossOrigin="anonymous" />
         </div>
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 h-[14mm] bg-white border-b border-red-100 flex items-center px-[3mm] z-10">
-          <img src={CRA_LOGO} alt="CRA" className="h-[10mm] w-auto ml-[2mm]" />
+          <img src={CRA_LOGO} alt="CRA" className="h-[10mm] w-auto ml-[2mm]" crossOrigin="anonymous" />
           <div className="flex flex-col text-right items-start">
             <span className="text-[9px] font-black text-red-600 leading-tight">الهلال الأحمر الجزائري</span>
             <span className="text-[7px] font-bold text-gray-800 leading-tight font-fr">Algerian Red Crescent</span>
@@ -129,7 +129,12 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
           {/* Photo */}
           <div className="w-[24mm] h-[30mm] bg-gray-50 border border-red-200 rounded-sm overflow-hidden flex items-center justify-center shrink-0">
             {data.photoUrl ? (
-              <img src={data.photoUrl} alt="" className="w-full h-full object-cover" />
+              <img 
+                src={data.photoUrl} 
+                alt="" 
+                className="w-full h-full object-cover" 
+                crossOrigin={data.photoUrl.startsWith('data:') ? undefined : "anonymous"} 
+              />
             ) : (
               <User className="w-10 h-10 text-gray-300" />
             )}
@@ -186,7 +191,7 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
               <span className="text-[6px] font-bold text-gray-400 leading-none">GS</span>
               <span className="text-[11px] font-black text-red-600 leading-none">{data.bloodType || '??'}</span>
             </div>
-            <img src={qrCodeUrl} alt="QR" className="w-[12mm] h-[12mm]" />
+            <img src={qrCodeUrl} alt="QR" className="w-[12mm] h-[12mm]" crossOrigin="anonymous" />
           </div>
         </div>
 
@@ -259,35 +264,63 @@ export default function App() {
   };
 
   const handleExportImage = async (format: 'png' | 'jpg') => {
-    if (!cardRef.current) return;
+    const node = cardRef.current;
+    if (!node) return;
+    
     try {
+      setIsLoading(true);
+      const options = { 
+        pixelRatio: 2, 
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      };
+      
       const dataUrl = format === 'png' 
-        ? await toPng(cardRef.current, { pixelRatio: 3 })
-        : await toJpeg(cardRef.current, { pixelRatio: 3, quality: 0.95 });
+        ? await toPng(node, options)
+        : await toJpeg(node, { ...options, quality: 0.95 });
       
       const link = document.createElement('a');
-      link.download = `CRA-Card-${formData.lastNameAr}-${formData.firstNameAr}.${format}`;
       link.href = dataUrl;
+      link.download = `CRA-Card-${formData.lastNameAr || 'Volunteer'}.${format}`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      
+      setShowExportMenu(false);
+      setIsLoading(false);
     } catch (err) {
       console.error('Export failed', err);
+      setIsLoading(false);
+      alert('فشل تصدير الصورة. يرجى التأكد من استقرار الاتصال بالإنترنت والمحاولة مرة أخرى.');
     }
   };
 
   const handleExportBatchImage = async (id: string, firstName: string, lastName: string, format: 'png' | 'jpg') => {
-    const ref = batchCardRefs.current[id];
-    if (!ref) return;
+    const node = batchCardRefs.current[id];
+    if (!node) return;
+    
     try {
+      const options = { 
+        pixelRatio: 2, 
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      };
+
       const dataUrl = format === 'png' 
-        ? await toPng(ref, { pixelRatio: 3 })
-        : await toJpeg(ref, { pixelRatio: 3, quality: 0.95 });
+        ? await toPng(node, options)
+        : await toJpeg(node, { ...options, quality: 0.95 });
       
       const link = document.createElement('a');
-      link.download = `CRA-Card-${lastName}-${firstName}.${format}`;
       link.href = dataUrl;
+      link.download = `CRA-Card-${lastName || 'Volunteer'}.${format}`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      
+      setActiveExportId(null);
     } catch (err) {
       console.error('Export failed', err);
+      alert('فشل تصدير الصورة.');
     }
   };
 
