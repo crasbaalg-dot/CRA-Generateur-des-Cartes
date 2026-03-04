@@ -57,11 +57,16 @@ const CRA_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Algerian_R
 // --- Helpers for Data Processing ---
 const processPhotoUrl = (url: string | null) => {
   if (!url) return null;
-  const driveMatch = url.match(/\/(?:d|file\/d|open\?id=)([\w-]{25,})/);
+  const trimmedUrl = url.trim();
+  
+  // Match Google Drive ID from various URL patterns
+  // Patterns: /d/ID, id=ID, file/d/ID, open?id=ID, uc?id=ID, etc.
+  const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/)([\w-]{25,})/);
   if (driveMatch && driveMatch[1]) {
-    return `https://drive.google.com/uc?id=${driveMatch[1]}`;
+    // Using thumbnail endpoint with high resolution is often more reliable than uc?id
+    return `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w1000`;
   }
-  return url;
+  return trimmedUrl;
 };
 
 const processWilaya = (val: any) => {
@@ -295,13 +300,13 @@ export default function App() {
             cellName: row['الخلية'] || '',
             birthDate: row['تاريخ الميلاد'] || '',
             birthPlace: row['مكان الميلاد'] || '',
-            wilaya: processWilaya(row['اللجنة الولائية']),
-            volunteerId: row['رقم المتطوع'] || String(idx + 1000),
-            photoUrl: processPhotoUrl(row['الصورة الشخصية']),
-            bloodType: row['الزمرة الدموية'] || '',
+            wilaya: processWilaya(row['اللجنة الولائية'] || row['wilaya']),
+            volunteerId: row['رقم المتطوع'] || row['volunteerId'] || String(idx + 1000),
+            photoUrl: processPhotoUrl(row['الصورة الشخصية'] || row['photoUrl'] || row['Photo'] || row['image']),
+            bloodType: row['الزمرة الدموية'] || row['bloodType'] || '',
             attributes: (row['الصفات'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5),
-            issueDate: row['تاريخ الإصدار'] || new Date().toISOString().split('T')[0],
-            expiryDate: row['تاريخ الانتهاء'] || ''
+            issueDate: row['تاريخ الإصدار'] || row['issueDate'] || new Date().toISOString().split('T')[0],
+            expiryDate: row['تاريخ الانتهاء'] || row['expiryDate'] || ''
           }));
           setBatchData(mappedData);
           setIsLoading(false);
