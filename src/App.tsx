@@ -278,18 +278,41 @@ export default function App() {
     if (!sheetUrl) return;
     setIsLoading(true);
     try {
-      // Extract Spreadsheet ID
-      const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-      if (!sheetIdMatch) {
-        throw new Error('رابط غير صالح. يرجى التأكد من نسخ رابط Google Sheet بشكل صحيح.');
-      }
+      let csvUrl = '';
       
-      const sheetId = sheetIdMatch[1];
-      // Use the gviz endpoint which is often more CORS-friendly for public sheets
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+      // Handle "Published to web" CSV links directly
+      if (sheetUrl.includes('/pub?') && sheetUrl.includes('output=csv')) {
+        csvUrl = sheetUrl;
+      } 
+      // Handle "Published to web" HTML links by converting to CSV
+      else if (sheetUrl.includes('/pubhtml') || (sheetUrl.includes('/pub') && !sheetUrl.includes('output=csv'))) {
+        csvUrl = sheetUrl.replace(/\/pubhtml|\/pub/, '/pub?output=csv');
+      }
+      // Handle standard spreadsheet URLs
+      else {
+        const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/);
+        if (!sheetIdMatch) {
+          throw new Error('رابط غير صالح. يرجى التأكد من نسخ رابط Google Sheet بشكل صحيح (مثلاً: رابط المشاركة أو رابط النشر على الويب).');
+        }
+        
+        const sheetId = sheetIdMatch[1];
+        const isPublished = sheetUrl.includes('/d/e/');
+        
+        if (isPublished) {
+          csvUrl = `https://docs.google.com/spreadsheets/d/e/${sheetId}/pub?output=csv`;
+        } else {
+          // Use the export endpoint as a fallback if gviz fails, or just use it as primary
+          csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+        }
+      }
 
+      console.log('Fetching from:', csvUrl);
       const response = await fetch(csvUrl);
+      
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('الملف غير موجود (404). تأكد من أن المعرف في الرابط صحيح وأن الملف لم يتم حذفه.');
+        }
         throw new Error(`خطأ في الاتصال: ${response.status}`);
       }
       
@@ -297,7 +320,7 @@ export default function App() {
       
       // Basic check if we got HTML instead of CSV (usually happens if sheet is private)
       if (csvText.trim().startsWith('<!DOCTYPE') || csvText.includes('<html')) {
-        throw new Error('الملف غير متاح. يرجى التأكد من أن الملف "متاح لأي شخص لديه الرابط" (Public) أو استخدم خيار "النشر على الويب".');
+        throw new Error('الملف خاص أو غير متاح. يرجى التأكد من أن الملف "متاح لأي شخص لديه الرابط" (Anyone with the link) أو استخدم خيار "النشر على الويب" (Publish to web).');
       }
       
       Papa.parse(csvText, {
