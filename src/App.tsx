@@ -60,11 +60,11 @@ const processPhotoUrl = (url: string | null) => {
   const trimmedUrl = url.trim();
   
   // Match Google Drive ID from various URL patterns
-  // Patterns: /d/ID, id=ID, file/d/ID, open?id=ID, uc?id=ID, etc.
   const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/)([\w-]{25,})/);
   if (driveMatch && driveMatch[1]) {
-    // Using thumbnail endpoint with high resolution is often more reliable than uc?id
-    return `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w1000`;
+    const id = driveMatch[1];
+    // This is the most reliable direct link format for Google Drive images currently
+    return `https://lh3.googleusercontent.com/d/${id}`;
   }
   return trimmedUrl;
 };
@@ -113,12 +113,12 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
       >
         {/* Background Watermark */}
         <div className="absolute inset-0 flex items-center justify-center opacity-[0.07] pointer-events-none">
-          <img src={CRA_LOGO} alt="" className="w-[70%]" crossOrigin="anonymous" />
+          <img src={CRA_LOGO} alt="" className="w-[70%]" crossOrigin="anonymous" referrerPolicy="no-referrer" />
         </div>
 
         {/* Header */}
         <div className="absolute top-0 left-0 right-0 h-[14mm] bg-white border-b border-red-100 flex items-center px-[3mm] z-10">
-          <img src={CRA_LOGO} alt="CRA" className="h-[10mm] w-auto ml-[2mm]" crossOrigin="anonymous" />
+          <img src={CRA_LOGO} alt="CRA" className="h-[10mm] w-auto ml-[2mm]" crossOrigin="anonymous" referrerPolicy="no-referrer" />
           <div className="flex flex-col text-right items-start">
             <span className="text-[9px] font-black text-red-600 leading-tight">الهلال الأحمر الجزائري</span>
             <span className="text-[7px] font-bold text-gray-800 leading-tight font-fr">Algerian Red Crescent</span>
@@ -140,6 +140,7 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
                 alt="" 
                 className="w-full h-full object-cover" 
                 crossOrigin={data.photoUrl.startsWith('data:') ? undefined : "anonymous"} 
+                referrerPolicy="no-referrer"
               />
             ) : (
               <User className="w-10 h-10 text-gray-300" />
@@ -277,45 +278,70 @@ export default function App() {
     if (!sheetUrl) return;
     setIsLoading(true);
     try {
-      // Convert standard Google Sheets URL to CSV export URL
-      let csvUrl = sheetUrl;
-      if (sheetUrl.includes('/edit')) {
-        csvUrl = sheetUrl.replace(/\/edit.*$/, '/export?format=csv');
+      // Extract Spreadsheet ID
+      const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (!sheetIdMatch) {
+        throw new Error('رابط غير صالح. يرجى التأكد من نسخ رابط Google Sheet بشكل صحيح.');
       }
+      
+      const sheetId = sheetIdMatch[1];
+      // Use the gviz endpoint which is often more CORS-friendly for public sheets
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
 
       const response = await fetch(csvUrl);
+      if (!response.ok) {
+        throw new Error(`خطأ في الاتصال: ${response.status}`);
+      }
+      
       const csvText = await response.text();
+      
+      // Basic check if we got HTML instead of CSV (usually happens if sheet is private)
+      if (csvText.trim().startsWith('<!DOCTYPE') || csvText.includes('<html')) {
+        throw new Error('الملف غير متاح. يرجى التأكد من أن الملف "متاح لأي شخص لديه الرابط" (Public) أو استخدم خيار "النشر على الويب".');
+      }
       
       Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
+          if (results.errors.length > 0) {
+            console.warn('CSV Parsing errors:', results.errors);
+          }
+          
           const mappedData: CardData[] = results.data.map((row: any, idx: number) => ({
             id: `row-${idx}`,
-            firstNameAr: row['الاسم (عربي)'] || '',
-            lastNameAr: row['اللقب (عربي)'] || '',
-            firstNameFr: row['الاسم (فرنسي)'] || '',
-            lastNameFr: row['اللقب (فرنسي)'] || '',
-            role: row['الصفة'] || 'متطوع',
-            cellName: row['الخلية'] || '',
-            birthDate: row['تاريخ الميلاد'] || '',
-            birthPlace: row['مكان الميلاد'] || '',
-            wilaya: processWilaya(row['اللجنة الولائية'] || row['wilaya']),
+            firstNameAr: row['الاسم (عربي)'] || row['firstNameAr'] || '',
+            lastNameAr: row['اللقب (عربي)'] || row['lastNameAr'] || '',
+            firstNameFr: row['الاسم (فرنسي)'] || row['firstNameFr'] || '',
+            lastNameFr: row['اللقب (فرنسي)'] || row['lastNameFr'] || '',
+            role: row['الصفة'] || row['role'] || 'متطوع',
+            cellName: row['الخلية'] || row['cellName'] || '',
+            birthDate: row['تاريخ الميلاد'] || row['birthDate'] || '',
+            birthPlace: row['مكان الميلاد'] || row['birthPlace'] || '',
+            wilaya: processWilaya(row['اللجنة الولائية'] || row['wilaya'] || ''),
             volunteerId: row['رقم المتطوع'] || row['volunteerId'] || String(idx + 1000),
             photoUrl: processPhotoUrl(row['الصورة الشخصية'] || row['photoUrl'] || row['Photo'] || row['image']),
             bloodType: row['الزمرة الدموية'] || row['bloodType'] || '',
-            attributes: (row['الصفات'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5),
+            attributes: (row['الصفات'] || row['attributes'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5),
             issueDate: row['تاريخ الإصدار'] || row['issueDate'] || new Date().toISOString().split('T')[0],
             expiryDate: row['تاريخ الانتهاء'] || row['expiryDate'] || ''
           }));
-          setBatchData(mappedData);
+          
+          if (mappedData.length === 0) {
+            alert('لم يتم العثور على بيانات في الملف. تأكد من مطابقة أسماء الأعمدة.');
+          } else {
+            setBatchData(mappedData);
+          }
           setIsLoading(false);
+        },
+        error: (error) => {
+          throw new Error(`خطأ في تحليل البيانات: ${error.message}`);
         }
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Fetch failed', err);
       setIsLoading(false);
-      alert('فشل جلب البيانات. تأكد من أن الرابط صحيح وأن الملف متاح للجميع (Public).');
+      alert(err.message || 'فشل جلب البيانات. تأكد من أن الرابط صحيح وأن الملف متاح للجميع (Public).');
     }
   };
 
