@@ -2,9 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Printer, RefreshCw, Upload, CreditCard, User, FileText, 
   Image as ImageIcon, CheckCircle, AlertCircle, LayoutTemplate, 
-  Download, Link as LinkIcon, Users, Plus, Trash2, ChevronDown
+  Download, Link as LinkIcon, Users, Plus, Trash2, ChevronDown,
+  FileImage, FileType
 } from 'lucide-react';
 import Papa from 'papaparse';
+import { toPng, toJpeg } from 'html-to-image';
+import { saveAs } from 'file-saver';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -57,15 +60,23 @@ const CRA_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/a/a9/Algerian_R
 // --- Helpers for Data Processing ---
 const processPhotoUrl = (url: string | null) => {
   if (!url) return null;
-  const trimmedUrl = url.trim();
+  let trimmedUrl = url.trim();
   
+  // Remove quotes if present
+  trimmedUrl = trimmedUrl.replace(/^["']|["']$/g, '');
+
   // Match Google Drive ID from various URL patterns
-  const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/)([\w-]{25,})/);
+  const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/|uc\?id=)([\w-]{25,})/);
   if (driveMatch && driveMatch[1]) {
     const id = driveMatch[1];
-    // This is the most reliable direct link format for Google Drive images currently
     return `https://lh3.googleusercontent.com/d/${id}`;
   }
+  
+  // If it looks like just a Google Drive ID
+  if (/^[\w-]{25,35}$/.test(trimmedUrl) && !trimmedUrl.includes('.') && !trimmedUrl.includes('/')) {
+    return `https://lh3.googleusercontent.com/d/${trimmedUrl}`;
+  }
+
   return trimmedUrl;
 };
 
@@ -98,6 +109,7 @@ interface CardData {
 }
 
 const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: typeof CARD_SIZES.standard }>(({ data, size }, ref) => {
+  const [imgError, setImgError] = useState(false);
   const selectedWilayaObj = WILAYAS.find(w => w.id === data.wilaya);
   const wilayaName = selectedWilayaObj ? selectedWilayaObj.name : '...';
   const qrData = `${data.wilaya}-${data.volunteerId}`;
@@ -134,13 +146,14 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
         <div className="absolute top-[14mm] bottom-0 left-0 right-0 flex p-[3mm] z-10">
           {/* Photo */}
           <div className="w-[24mm] h-[30mm] bg-gray-50 border border-red-200 rounded-sm overflow-hidden flex items-center justify-center shrink-0">
-            {data.photoUrl ? (
+            {data.photoUrl && !imgError ? (
               <img 
                 src={data.photoUrl} 
                 alt="" 
                 className="w-full h-full object-cover" 
                 crossOrigin={data.photoUrl.startsWith('data:') ? undefined : "anonymous"} 
                 referrerPolicy="no-referrer"
+                onError={() => setImgError(true)}
               />
             ) : (
               <User className="w-10 h-10 text-gray-300" />
@@ -243,8 +256,40 @@ export default function App() {
   const [batchData, setBatchData] = useState<CardData[]>([]);
   const [sheetUrl, setSheetUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const batchCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const downloadCard = async (format: 'png' | 'jpg', cardData: CardData, element?: HTMLDivElement | null) => {
+    const target = element || cardRef.current;
+    if (!target) return;
+    
+    setIsLoading(true);
+    try {
+      const options = {
+        quality: 0.95,
+        pixelRatio: 3, // High resolution
+        backgroundColor: '#ffffff',
+      };
+
+      let dataUrl;
+      if (format === 'png') {
+        dataUrl = await toPng(target, options);
+      } else {
+        dataUrl = await toJpeg(target, options);
+      }
+
+      const fileName = `CRA-Card-${cardData.lastNameFr}-${cardData.firstNameFr}.${format}`;
+      saveAs(dataUrl, fileName);
+    } catch (err) {
+      console.error('Export failed', err);
+      setError('فشل تصدير الصورة. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setIsLoading(false);
+      setShowExportDropdown(false);
+    }
+  };
 
   useEffect(() => {
     document.title = "منصة بطاقات الهلال الأحمر الجزائري";
@@ -275,8 +320,9 @@ export default function App() {
   };
 
   const fetchGoogleSheet = async () => {
+    setError(null);
     if (!sheetUrl.trim()) {
-      alert('يرجى إدخال رابط ملف Google Sheets أولاً.');
+      setError('يرجى إدخال رابط ملف Google Sheets أولاً.');
       return;
     }
     setIsLoading(true);
@@ -347,7 +393,7 @@ export default function App() {
             birthPlace: row['مكان الميلاد'] || row['birthPlace'] || '',
             wilaya: processWilaya(row['اللجنة الولائية'] || row['wilaya'] || ''),
             volunteerId: row['رقم المتطوع'] || row['volunteerId'] || String(idx + 1000),
-            photoUrl: processPhotoUrl(row['الصورة الشخصية'] || row['photoUrl'] || row['Photo'] || row['image']),
+            photoUrl: processPhotoUrl(row['الصورة الشخصية'] || row['photoUrl'] || row['Photo'] || row['image'] || row['Image'] || row['Picture'] || row['photo']),
             bloodType: row['الزمرة الدموية'] || row['bloodType'] || '',
             attributes: (row['الصفات'] || row['attributes'] || '').split(',').map((s: string) => s.trim()).filter(Boolean).slice(0, 5),
             issueDate: row['تاريخ الإصدار'] || row['issueDate'] || new Date().toISOString().split('T')[0],
@@ -355,20 +401,21 @@ export default function App() {
           }));
           
           if (mappedData.length === 0) {
-            alert('لم يتم العثور على بيانات في الملف. تأكد من مطابقة أسماء الأعمدة.');
+            setError('لم يتم العثور على بيانات في الملف. تأكد من مطابقة أسماء الأعمدة.');
           } else {
             setBatchData(mappedData);
           }
           setIsLoading(false);
         },
         error: (error) => {
-          throw new Error(`خطأ في تحليل البيانات: ${error.message}`);
+          setError(`خطأ في تحليل البيانات: ${error.message}`);
+          setIsLoading(false);
         }
       });
     } catch (err: any) {
       console.error('Fetch failed', err);
       setIsLoading(false);
-      alert(err.message || 'فشل جلب البيانات. تأكد من أن الرابط صحيح وأن الملف متاح للجميع (Public).');
+      setError(err.message || 'فشل جلب البيانات. تأكد من أن الرابط صحيح وأن الملف متاح للجميع (Public).');
     }
   };
 
@@ -612,13 +659,47 @@ export default function App() {
                   <VolunteerCard ref={cardRef} data={formData} size={CARD_SIZES.standard} />
                 </div>
 
-                <div className="w-full">
+                <div className="w-full space-y-3">
                   <button 
                     onClick={() => window.print()}
                     className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-slate-200 active:scale-[0.98]"
                   >
-                    <Printer className="w-5 h-5" /> طباعة
+                    <Printer className="w-5 h-5" /> طباعة البطاقة
                   </button>
+                  
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowExportDropdown(!showExportDropdown)}
+                      className="w-full flex items-center justify-center gap-2 bg-white border-2 border-slate-200 hover:border-red-500 hover:text-red-600 text-slate-700 font-bold py-4 rounded-2xl transition-all active:scale-[0.98]"
+                    >
+                      <ImageIcon className="w-5 h-5" /> تصدير كصورة <ChevronDown className={cn("w-4 h-4 transition-transform", showExportDropdown && "rotate-180")} />
+                    </button>
+                    
+                    {showExportDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                        <button 
+                          onClick={() => downloadCard('png', formData)}
+                          disabled={isLoading}
+                          className="w-full flex items-center gap-3 px-6 py-4 hover:bg-slate-50 text-slate-700 font-bold transition-colors border-b border-slate-100 disabled:opacity-50"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
+                            <FileImage className="w-4 h-4" />
+                          </div>
+                          <span>تصدير بصيغة PNG (دقة عالية)</span>
+                        </button>
+                        <button 
+                          onClick={() => downloadCard('jpg', formData)}
+                          disabled={isLoading}
+                          className="w-full flex items-center gap-3 px-6 py-4 hover:bg-slate-50 text-slate-700 font-bold transition-colors disabled:opacity-50"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+                            <FileType className="w-4 h-4" />
+                          </div>
+                          <span>تصدير بصيغة JPG (حجم أصغر)</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -687,21 +768,36 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <input 
-                  value={sheetUrl} 
-                  onChange={(e) => setSheetUrl(e.target.value)}
-                  className="flex-1 px-5 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 outline-none transition-all bg-white" 
-                  placeholder="https://docs.google.com/spreadsheets/d/..." 
-                />
-                <button 
-                  onClick={fetchGoogleSheet}
-                  disabled={isLoading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-emerald-100 active:scale-95"
-                >
-                  {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                  جلب البيانات
-                </button>
+              <div className="flex flex-col gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="flex gap-3">
+                  <input 
+                    value={sheetUrl} 
+                    onChange={(e) => {
+                      setSheetUrl(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    className={cn(
+                      "flex-1 px-5 py-3 rounded-xl border outline-none transition-all bg-white",
+                      error ? "border-red-300 focus:border-red-500" : "border-slate-200 focus:border-emerald-500"
+                    )} 
+                    placeholder="https://docs.google.com/spreadsheets/d/..." 
+                  />
+                  <button 
+                    onClick={fetchGoogleSheet}
+                    disabled={isLoading}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-emerald-100 active:scale-95"
+                  >
+                    {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                    جلب البيانات
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-1">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="text-xs font-bold">{error}</span>
+                  </div>
+                )}
               </div>
               
               {!batchData.length && !isLoading && (
@@ -718,9 +814,32 @@ export default function App() {
                 {batchData.map((data, idx) => (
                   <div key={data.id || idx} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative group">
                     <div className="absolute top-4 left-4 flex gap-2 z-20">
+                      <div className="relative group/export">
+                        <button 
+                          className="w-8 h-8 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-emerald-600 transition-colors"
+                          title="تصدير كصورة"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
+                        <div className="absolute top-full left-0 mt-1 hidden group-hover/export:block bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden min-w-[120px]">
+                          <button 
+                            onClick={() => downloadCard('png', data, batchCardRefs.current[data.id!])}
+                            className="w-full text-right px-4 py-2 text-[10px] font-bold hover:bg-slate-50 text-slate-600 border-b border-slate-100"
+                          >
+                            PNG
+                          </button>
+                          <button 
+                            onClick={() => downloadCard('jpg', data, batchCardRefs.current[data.id!])}
+                            className="w-full text-right px-4 py-2 text-[10px] font-bold hover:bg-slate-50 text-slate-600"
+                          >
+                            JPG
+                          </button>
+                        </div>
+                      </div>
                       <button 
                         onClick={() => setBatchData(prev => prev.filter((_, i) => i !== idx))}
                         className="w-8 h-8 bg-white shadow-sm border border-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:text-red-600 transition-colors"
+                        title="حذف"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
