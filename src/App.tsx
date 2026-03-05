@@ -275,7 +275,10 @@ export default function App() {
   };
 
   const fetchGoogleSheet = async () => {
-    if (!sheetUrl) return;
+    if (!sheetUrl.trim()) {
+      alert('يرجى إدخال رابط ملف Google Sheets أولاً.');
+      return;
+    }
     setIsLoading(true);
     try {
       let csvUrl = '';
@@ -289,7 +292,7 @@ export default function App() {
         csvUrl = sheetUrl.replace(/\/pubhtml|\/pub/, '/pub?output=csv');
       }
       // Handle standard spreadsheet URLs
-      else {
+      else if (sheetUrl.includes('docs.google.com/spreadsheets/d/')) {
         const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/);
         if (!sheetIdMatch) {
           throw new Error('رابط غير صالح. يرجى التأكد من نسخ رابط Google Sheet بشكل صحيح (مثلاً: رابط المشاركة أو رابط النشر على الويب).');
@@ -301,9 +304,10 @@ export default function App() {
         if (isPublished) {
           csvUrl = `https://docs.google.com/spreadsheets/d/e/${sheetId}/pub?output=csv`;
         } else {
-          // Use the export endpoint as a fallback if gviz fails, or just use it as primary
           csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
         }
+      } else {
+        throw new Error('الرابط المدخل لا يبدو كرابط Google Sheets صحيح. يرجى التأكد من الرابط.');
       }
 
       console.log('Fetching from:', csvUrl);
