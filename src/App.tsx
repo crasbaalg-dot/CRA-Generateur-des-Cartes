@@ -66,14 +66,16 @@ const processPhotoUrl = (url: string | null) => {
   trimmedUrl = trimmedUrl.replace(/^["']|["']$/g, '');
 
   // Match Google Drive ID from various URL patterns
-  const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/|uc\?id=)([\w-]{25,})/);
+  // Patterns: /d/ID, id=ID, uc?id=ID, open?id=ID, file/d/ID, etc.
+  const driveMatch = trimmedUrl.match(/(?:id=|\/d\/|\/file\/d\/|usercontent\.com\/d\/|uc\?id=|open\?id=)([\w-]{25,50})/);
   if (driveMatch && driveMatch[1]) {
     const id = driveMatch[1];
+    // lh3.googleusercontent.com/d/ID is the most reliable for direct embedding and CORS
     return `https://lh3.googleusercontent.com/d/${id}`;
   }
   
   // If it looks like just a Google Drive ID
-  if (/^[\w-]{25,35}$/.test(trimmedUrl) && !trimmedUrl.includes('.') && !trimmedUrl.includes('/')) {
+  if (/^[\w-]{25,50}$/.test(trimmedUrl) && !trimmedUrl.includes('.') && !trimmedUrl.includes('/')) {
     return `https://lh3.googleusercontent.com/d/${trimmedUrl}`;
   }
 
@@ -110,6 +112,12 @@ interface CardData {
 
 const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: typeof CARD_SIZES.standard }>(({ data, size }, ref) => {
   const [imgError, setImgError] = useState(false);
+  
+  // Reset image error state when photo URL changes
+  useEffect(() => {
+    setImgError(false);
+  }, [data.photoUrl]);
+
   const selectedWilayaObj = WILAYAS.find(w => w.id === data.wilaya);
   const wilayaName = selectedWilayaObj ? selectedWilayaObj.name : '...';
   const qrData = `${data.wilaya}-${data.volunteerId}`;
@@ -148,6 +156,7 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
           <div className="w-[24mm] h-[30mm] bg-gray-50 border border-red-200 rounded-sm overflow-hidden flex items-center justify-center shrink-0">
             {data.photoUrl && !imgError ? (
               <img 
+                key={data.photoUrl}
                 src={data.photoUrl} 
                 alt="" 
                 className="w-full h-full object-cover" 
