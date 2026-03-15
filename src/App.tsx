@@ -3,7 +3,7 @@ import {
   Printer, RefreshCw, Upload, CreditCard, User, FileText, 
   Image as ImageIcon, CheckCircle, AlertCircle, LayoutTemplate, 
   Download, Link as LinkIcon, Users, Plus, Trash2, ChevronDown,
-  FileImage, FileType
+  FileImage, FileType, Menu, X
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { toPng, toJpeg } from 'html-to-image';
@@ -255,6 +255,8 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
 
 export default function App() {
   const [view, setView] = useState<'single' | 'sheets'>('single');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showTip, setShowTip] = useState(false);
   const [formData, setFormData] = useState<CardData>({
     firstNameAr: '', lastNameAr: '', firstNameFr: '', lastNameFr: '',
     role: '', cellName: '', birthDate: '', birthPlace: '',
@@ -442,18 +444,19 @@ export default function App() {
 
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50 no-print">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="bg-red-50 p-2 rounded-xl">
-              <img src={CRA_LOGO} alt="CRA" className="h-10 w-auto" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="bg-red-50 p-1.5 sm:p-2 rounded-xl">
+              <img src={CRA_LOGO} alt="CRA" className="h-8 sm:h-10 w-auto" />
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">منصة بطاقات الهلال الأحمر</h1>
-              <p className="text-xs font-bold text-red-600 uppercase tracking-widest">Algerian Red Crescent Cards</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight truncate">منصة بطاقات الهلال الأحمر</h1>
+              <p className="text-[10px] sm:text-xs font-bold text-red-600 uppercase tracking-tight sm:tracking-widest">Algerian Red Crescent Cards</p>
             </div>
           </div>
           
-          <nav className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
             <button 
               onClick={() => setView('single')}
               className={cn(
@@ -473,16 +476,51 @@ export default function App() {
               <LinkIcon className="w-4 h-4" /> استيراد من غوغل
             </button>
           </nav>
+
+          {/* Mobile Menu Button */}
+          <button 
+            className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors active:scale-95"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="Menu"
+          >
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
+
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <div className="md:hidden border-t border-slate-100 bg-white p-4 animate-in slide-in-from-top duration-200">
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => { setView('single'); setIsMenuOpen(false); }}
+                className={cn(
+                  "w-full px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-3 active:scale-95",
+                  view === 'single' ? "bg-red-50 text-red-600" : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                <User className="w-5 h-5" /> بطاقة فردية
+              </button>
+              <button 
+                onClick={() => { setView('sheets'); setIsMenuOpen(false); }}
+                className={cn(
+                  "w-full px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-3 active:scale-95",
+                  view === 'sheets' ? "bg-red-50 text-red-600" : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                <LinkIcon className="w-5 h-5" /> استيراد من غوغل
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 no-print">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 no-print">
         {view === 'single' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Form Section */}
             <div className="lg:col-span-7 space-y-6">
               <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="px-6 sm:px-8 py-4 sm:py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-lg shadow-red-100">
                       <FileText className="w-5 h-5" />
@@ -502,7 +540,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="p-8 space-y-8">
+                <div className="p-6 sm:p-8 space-y-8">
                   {/* Name Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -664,8 +702,10 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-slate-100 p-10 rounded-[40px] border-4 border-white shadow-inner mb-8">
-                  <VolunteerCard ref={cardRef} data={formData} size={CARD_SIZES.standard} />
+                <div className="bg-slate-100 p-4 sm:p-10 rounded-[30px] sm:rounded-[40px] border-4 border-white shadow-inner mb-8 flex justify-center overflow-x-auto">
+                  <div className="min-w-fit">
+                    <VolunteerCard ref={cardRef} data={formData} size={CARD_SIZES.standard} />
+                  </div>
                 </div>
 
                 <div className="w-full space-y-3">
@@ -726,8 +766,8 @@ export default function App() {
         ) : (
           /* Google Sheets View */
           <div className="space-y-8">
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 space-y-6">
-              <div className="flex items-center justify-between">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-100">
                     <LinkIcon className="w-6 h-6" />
@@ -738,16 +778,16 @@ export default function App() {
                   </div>
                 </div>
                 {batchData.length > 0 && (
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <button 
                       onClick={() => window.print()}
-                      className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-2xl transition-all flex items-center gap-2 shadow-lg shadow-red-100 active:scale-95"
+                      className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-100 active:scale-95"
                     >
                       <Printer className="w-5 h-5" /> طباعة الكل ({batchData.length})
                     </button>
                     <button 
                       onClick={() => setBatchData([])}
-                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all active:scale-95"
+                      className="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all active:scale-95"
                     >
                       مسح القائمة
                     </button>
@@ -755,30 +795,39 @@ export default function App() {
                 )}
               </div>
 
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 space-y-4">
-                <div className="flex gap-3">
-                  <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
-                  <div className="space-y-2">
-                    <p className="text-sm font-black text-blue-900">نصيحة للسرعة:</p>
-                    <p className="text-xs text-blue-700 leading-relaxed">استخدم خيار "النشر على الويب" بصيغة CSV من قائمة ملف في Google Sheets للحصول على أفضل النتائج.</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl overflow-hidden transition-all">
+                <button 
+                  onClick={() => setShowTip(!showTip)}
+                  className="w-full flex items-center justify-between p-4 sm:p-6 hover:bg-blue-100/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
+                    <span className="text-sm font-black text-blue-900">نصيحة للسرعة وأسماء الأعمدة</span>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {[
-                    'الاسم (عربي)', 'اللقب (عربي)', 'الاسم (فرنسي)', 'اللقب (فرنسي)',
-                    'الصفة', 'الخلية', 'تاريخ الميلاد', 'مكان الميلاد',
-                    'الزمرة الدموية', 'اللجنة الولائية', 'رقم المتطوع', 'الصورة الشخصية',
-                    'تاريخ الإصدار', 'تاريخ الانتهاء'
-                  ].map(col => (
-                    <div key={col} className="bg-white/50 px-3 py-1.5 rounded-lg border border-blue-100 text-[10px] font-bold text-blue-800 flex items-center gap-1.5">
-                      <CheckCircle className="w-3 h-3 text-blue-500" /> {col}
+                  <ChevronDown className={cn("w-5 h-5 text-blue-600 transition-transform duration-300", showTip && "rotate-180")} />
+                </button>
+
+                {showTip && (
+                  <div className="px-6 pb-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <p className="text-xs text-blue-700 leading-relaxed">استخدم خيار "النشر على الويب" بصيغة CSV من قائمة ملف في Google Sheets للحصول على أفضل النتائج. تأكد من استخدام أسماء الأعمدة التالية:</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {[
+                        'الاسم (عربي)', 'اللقب (عربي)', 'الاسم (فرنسي)', 'اللقب (فرنسي)',
+                        'الصفة', 'الخلية', 'تاريخ الميلاد', 'مكان الميلاد',
+                        'الزمرة الدموية', 'اللجنة الولائية', 'رقم المتطوع', 'الصورة الشخصية',
+                        'تاريخ الإصدار', 'تاريخ الانتهاء'
+                      ].map(col => (
+                        <div key={col} className="bg-white/50 px-3 py-1.5 rounded-lg border border-blue-100 text-[10px] font-bold text-blue-800 flex items-center gap-1.5">
+                          <CheckCircle className="w-3 h-3 text-blue-500" /> {col}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input 
                     value={sheetUrl} 
                     onChange={(e) => {
@@ -794,7 +843,7 @@ export default function App() {
                   <button 
                     onClick={fetchGoogleSheet}
                     disabled={isLoading}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-emerald-100 active:scale-95"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md shadow-emerald-100 active:scale-95"
                   >
                     {isLoading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                     جلب البيانات
