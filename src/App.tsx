@@ -181,7 +181,7 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
             </div>
 
             {/* Role & Cell */}
-            <div className="flex flex-col gap-[1mm] mt-[1mm]">
+            <div className="flex flex-col gap-[1mm] mt-[1mm] pl-[15mm]">
               <div className="bg-red-600 text-white px-[2mm] py-[0.5mm] rounded-sm w-fit max-w-full">
                 <span className="text-[10px] font-bold truncate block">
                   {data.role === 'رئيس خلية' ? `رئيس خلية ${data.cellName}` : data.role}
@@ -207,15 +207,15 @@ const VolunteerCard = React.forwardRef<HTMLDivElement, { data: CardData, size: t
             </div>
 
             {/* Birth Info */}
-            <div className="mt-auto mb-[1mm]">
+            <div className="mt-auto mb-[1mm] pl-[15mm]">
               <p className="text-[8px] font-bold text-gray-700">
                 تاريخ ومكان الميلاد: <span className="text-gray-900">{data.birthDate || '----------'} بـ {data.birthPlace || '----------'}</span>
               </p>
             </div>
           </div>
 
-          {/* Blood Type & QR */}
-          <div className="w-[15mm] flex flex-col items-center justify-between shrink-0 py-[1mm]">
+          {/* Blood Type & QR - Positioned absolutely to allow more space for the name */}
+          <div className="absolute bottom-[3mm] left-[3mm] flex flex-col items-center gap-[1mm] z-20">
             <div className="flex flex-col items-center">
               <span className="text-[6px] font-bold text-gray-400 leading-none">GS</span>
               <span className="text-[11px] font-black text-red-600 leading-none">{data.bloodType || '??'}</span>
